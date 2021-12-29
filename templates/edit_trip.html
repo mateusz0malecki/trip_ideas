@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block page_title %}
+  Edit trip
+{% endblock %}
+
+{% block page_body %}
+<br>
+<form id="trip_form" method="POST" action="{{ url_for('edit_trip', trip_id=trip[0]) }}">
+  <div class="container">
+    <br><h1>Edit trip "{{ trip[1] }}" :</h1><br>
+    <div class="row mb-3">
+      <div class="col-3">
+        <label for="trip_name" class="col-form-label">Trip name</label>
+      </div>
+      <div class="col-4">
+        <input type="text" id="trip_name" name="trip_name" class="form-control" aria-describedby="passwordHelpInline" value="{{ trip[1] }}">
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-3">
+        <label for="email" class="col-form-label">Your email</label>
+      </div>
+      <div class="col-4">
+        <input type="email" id="email" name="email" class="form-control" aria-describedby="passwordHelpInline" value="{{ trip[2] }}">
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-3">
+        <label for="description" class="col-form-label">Short description</label>
+      </div>
+      <div class="col-4">
+        <textarea class="form-control" id="description" name="description" rows="3">{{ trip[3] }}</textarea>
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-3">
+        <label class="col-form-label">Completeness</label>
+      </div>
+      <div class="col-4">
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="completeness" id="completeness1" value="yes" {{ 'checked' if trip[4] }}>
+          <label class="form-check-label" for="completeness1">
+            Yes - the idea is complete including price proposal
+          </label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="completeness" id="completeness2" value="no" {{ 'checked' if not trip[4] }}>
+          <label class="form-check-label" for="completeness2">
+            No - this is just pure idea
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-3">
+        <label class="col-form-label">May we contact you for details?</label>
+      </div>
+      <div class="col-4 mt-2">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="yes" id="contact" name="contact" {{ 'checked' if trip[5] }}>
+          <label class="form-check-label" for="contact">
+          Yes, I agree
+          </label>
+        </div>
+      </div>
+    </div>
+    <button type="submit" class="btn btn-success btn-block">Send proposal</button>
+  </div>
+</form>
+{% endblock %}

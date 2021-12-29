@@ -1,0 +1,42 @@
+{% from "macros.html" import show_flash %}
+{% extends "base.html" %}
+
+{% block page_title %}
+  HOME: Trip ideas
+{% endblock %}
+
+
+{% block page_body %}
+
+{{ show_flash() }}
+{{ session.pop('_flashes', '') }}
+
+<br>
+<form id="trips" method="POST" action="{{ url_for('index') }}">
+  <div class="container">
+
+    <h1>Check existing trip ideas:</h1>
+
+    <br><h3>Please select a name:</h3>
+
+    <div class="row mb-4">
+      <div class="col-5">
+        <label class="col-form-label">Trip name</label>
+        <select class="form-select" aria-label="Default select example" name="name" id="name">
+          {% for trip in trips %}
+          <option value="{{ trip[1] }}">{{ trip[1] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block">Submit</button>
+
+    {% if not cur_login.is_valid %}
+      <br><br><br><br><br><br><h5>Login to add your own trip ideas.</h5>
+    {% endif %}
+
+  </div>
+</form>
+
+{% endblock %}
