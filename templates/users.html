@@ -61,12 +61,12 @@
         <tbody>
           {% for user in users %}
           <tr>
-            <th scope="row">{{ user[0] }}</th>
-            <td>{{ user[1] }}</td>
-            <td>{{ user[2] }}</td>
+            <th scope="row">{{ user.id }}</th>
+            <td>{{ user.name }}</td>
+            <td>{{ user.email }}</td>
             <td>
-                <a href="{{ url_for('user_status_change', action='active', user_name=user[1]) }}">
-                  {% if user[4] %}
+                <a href="{{ url_for('user_status_change', action='active', user_name=user.name) }}">
+                  {% if user.is_active %}
                      &check;
                   {% else %}
                      &#x25a2;
@@ -74,8 +74,8 @@
                 </a>
             </td>
             <td>
-                <a href="{{ url_for('user_status_change', action='admin', user_name=user[1]) }}">
-                  {% if user[3] %}
+                <a href="{{ url_for('user_status_change', action='admin', user_name=user.name) }}">
+                  {% if user.is_admin %}
                      &check;
                   {% else %}
                      &#x25a2;
@@ -83,12 +83,12 @@
                 </a>
             </td>
             <td>
-                <a href="{{ url_for('edit_user', user_name=user[1]) }}"
+                <a href="{{ url_for('edit_user', user_name=user.name) }}"
                    class="btn btn-success btn-sm" role="button">Edit...</a>
                 <a type="button" class="btn btn-danger btn-sm delete-confirm"
                    data-bs-toggle="modal" data-bs-target="#confirmDeleteModal"
-                   data-desc="{{ 'Delete user {}?'.format(user[1]) }}"
-                   data-url="{{ url_for('delete_user', user_name=user[1]) }}">
+                   data-desc="{{ 'Delete user {}?'.format(user.name) }}"
+                   data-url="{{ url_for('delete_user', user_name=user.name) }}">
                   Delete
                 </a>
             </td>
@@ -98,4 +98,3 @@
       </table>
 </div>
 {% endblock %}
-

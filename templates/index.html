@@ -24,7 +24,7 @@
         <label class="col-form-label">Trip name</label>
         <select class="form-select" aria-label="Default select example" name="name" id="name">
           {% for trip in trips %}
-          <option value="{{ trip[1] }}">{{ trip[1] }}</option>
+          <option value="{{ trip.name }}">{{ trip.name }}</option>
           {% endfor %}
         </select>
       </div>

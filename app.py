@@ -1,23 +1,38 @@
-from flask import Flask, render_template, request, url_for, flash, g, redirect, session
-import sqlite3
+from flask import Flask, render_template, request, url_for, flash, redirect, session
+from flask_sqlalchemy import SQLAlchemy
 
 import random
 import string
 import hashlib
 import binascii
 
-app_info = {
-    'db_file': 'C:/Users/mmale/Desktop/Udemy_Flask/Projekt3_Trips_CRUD/data/base.db'
-}
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'a_secret_key'
+app.config.from_pyfile('config.cfg')
+db = SQLAlchemy(app)
 
 
-def get_db():
-    db = getattr(g, '_database', None)
-    if db is None:
-        db = g._database = sqlite3.connect(app_info['db_file'])
-    return db
+class Trips(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True)
+    email = db.Column(db.String(100), unique=True)
+    description = db.Column(db.String(200))
+    completeness = db.Column(db.Boolean)
+    contact = db.Column(db.Boolean)
+
+    def __repr__(self):
+        return '<id: {}, name: {}>'.format(self.id, self.name)
+
+
+class Users(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True)
+    email = db.Column(db.String(100), unique=True)
+    password = db.Column(db.Text)
+    is_active = db.Column(db.Boolean)
+    is_admin = db.Column(db.Boolean)
+
+    def __repr__(self):
+        return '<id: {}, name: {}>'.format(self.id, self.name)
 
 
 class UserPass:
@@ -58,12 +73,9 @@ class UserPass:
 
     def login_user(self):
         """Logging user"""
-        db = get_db()
-        sql_statement = 'select id, name, email, password, is_active, is_admin from users where name=?'
-        cur = db.execute(sql_statement, [self.user])
-        user_record = cur.fetchone()
+        user_record = Users.query.filter(Users.name == self.user).first()
 
-        if user_record is not None and self.verify_password(user_record[3], self.password):
+        if user_record is not None and self.verify_password(user_record.password, self.password):
             return user_record
         else:
             self.user = None
@@ -72,30 +84,20 @@ class UserPass:
 
     def get_user_info(self):
         """Getting stored info if user is active and is an admin"""
-        db = get_db()
-        sql_statement = 'select name, email, is_active, is_admin from users where name=?'
-        cur = db.execute(sql_statement, [self.user])
-        db_user = cur.fetchone()
+        db_user = Users.query.filter(Users.name == self.user).first()
 
         if db_user is None:
             self.is_valid = False
             self.is_admin = False
             self.email = ''
-        elif db_user[2] != 1:
+        elif db_user.is_active != 1:
             self.is_valid = False
             self.is_admin = False
-            self.email = db_user[1]
+            self.email = db_user.email
         else:
             self.is_valid = True
-            self.is_admin = db_user[3]
-            self.email = db_user[1]
-
-
-@app.teardown_appcontext
-def close_connection(exception):
-    db = getattr(g, '_database', None)
-    if db is not None:
-        db.close()
+            self.is_admin = db_user.is_admin
+            self.email = db_user.email
 
 
 @app.route('/', methods=['GET', 'POST'])
@@ -104,20 +106,13 @@ def index():
     cur_login.get_user_info()
 
     if request.method == 'GET':
-        db = get_db()
-        sql_command = 'select id, name, email, description, completeness, contact from trips;'
-        cur = db.execute(sql_command)
-        trips = cur.fetchall()
+        trips = Trips.query.all()
         return render_template('index.html', trips=trips, active_menu='index', cur_login=cur_login)
     else:
         trip = request.form['name'] if 'name' in request.form else ''
+        chosen_trip = Trips.query.filter(Trips.name == trip).first()
 
-        db = get_db()
-        sql_command = 'select id, name, email, description, completeness, contact from trips where name=?;'
-        cur = db.execute(sql_command, [trip])
-        trip = cur.fetchone()
-
-        return render_template('trip_added.html', trip=trip, active_menu='index', cur_login=cur_login)
+        return render_template('trip_added.html', trip=chosen_trip, active_menu='index', cur_login=cur_login)
 
 
 @app.route('/new_trip', methods=['GET', 'POST'])
@@ -137,13 +132,12 @@ def new_trip():
         completeness = False if request.form['completeness'] == 'no' else True
         contact = False if 'contact' not in request.form else True
 
-        db = get_db()
-        sql_command = 'insert into trips(name, email, description, completeness, contact) values(?, ?, ?, ?, ?)'
-        db.execute(sql_command, [trip_name, email, description, completeness, contact])
-        db.commit()
+        trip_to_add = Trips(name=trip_name, email=email, description=description, completeness=completeness,
+                            contact=contact)
+        db.session.add(trip_to_add)
+        db.session.commit()
 
         flash('Trip idea has been saved!')
-
         return redirect(url_for('index'))
 
 
@@ -154,10 +148,7 @@ def all_trips():
     if not cur_login.is_valid or not cur_login.is_admin:
         return redirect(url_for('login'))
 
-    db = get_db()
-    sql_command = 'select id, name, email, description, completeness, contact from trips;'
-    cur = db.execute(sql_command)
-    trips = cur.fetchall()
+    trips = Trips.query.all()
     return render_template('all_trips.html', trips=trips, active_menu='all_trips', cur_login=cur_login)
 
 
@@ -168,12 +159,8 @@ def edit_trip(trip_id):
     if not cur_login.is_valid or not cur_login.is_admin:
         return redirect(url_for('login'))
 
-    db = get_db()
-
     if request.method == 'GET':
-        sql_command = 'select id, name, email, description, completeness, contact from trips where id=?;'
-        cur = db.execute(sql_command, [trip_id])
-        trip = cur.fetchone()
+        trip = Trips.query.filter(Trips.id == trip_id).first()
         if trip is None:
             flash('No such trip idea existing, sorry.')
             return redirect(url_for('all_trips'))
@@ -186,9 +173,13 @@ def edit_trip(trip_id):
         completeness = False if request.form['completeness'] == 'no' else True
         contact = False if 'contact' not in request.form else True
 
-        sql_command = 'update trips set name=?, email=?, description=?, completeness=?, contact=? where id=?'
-        db.execute(sql_command, [trip_name, email, description, completeness, contact, trip_id])
-        db.commit()
+        trip = Trips.query.filter(Trips.id == trip_id).first()
+        trip.name = trip_name
+        trip.email = email
+        trip.description = description
+        trip.completeness = completeness
+        trip.contact = contact
+        db.session.commit()
 
         flash('Trip "{}" has been edited'.format(trip_name))
         return redirect(url_for('all_trips'))
@@ -201,34 +192,31 @@ def delete_trip(trip_id):
     if not cur_login.is_valid or not cur_login.is_admin:
         return redirect(url_for('login'))
 
-    db = get_db()
-    sql_statement = 'delete from trips where id = ?;'
-    db.execute(sql_statement, [trip_id])
-    db.commit()
+    trip_to_delete = Trips.query.filter(Trips.id == trip_id).first()
+    db.session.delete(trip_to_delete)
+    db.session.commit()
     return redirect(url_for('all_trips'))
 
 
 @app.route('/init_app')
 def init_app():
     # check if there are users defined (at least one active admin required)
-    db = get_db()
-    sql_statement = 'select count(*) as cnt from users where is_active and is_admin;'
-    cur = db.execute(sql_statement)
-    active_admins = cur.fetchone()
+    db.create_all()
+    active_admins = Users.query.filter(Users.is_active is True, Users.is_admin is True).count()
 
     print(active_admins)
 
-    if active_admins[0] > 0:
+    if active_admins > 0:
         flash('Application is already set-up. Nothing to do')
         return redirect(url_for('index'))
     else:
         # if not - create/update admin account with a new password and admin privileges, display random username
         user_pass = UserPass()
         user_pass.get_random_user_password()
-        sql_statement = '''insert into users(name, email, password, is_active, is_admin)
-                           values(?,?,?,True, True);'''
-        db.execute(sql_statement, [user_pass.user, 'noone@blablabla', user_pass.hash_password()])
-        db.commit()
+        new_admin = Users(name=user_pass.user, email='noone@blablabla', password=user_pass.hash_password(),
+                          is_active=True, is_admin=True)
+        db.session.add(new_admin)
+        db.session.commit()
         flash('User {} with password {} has been created'.format(user_pass.user, user_pass.password))
         return redirect(url_for('index'))
 
@@ -271,10 +259,7 @@ def users():
     if not cur_login.is_valid or not cur_login.is_admin:
         return redirect(url_for('login'))
 
-    db = get_db()
-    sql_command = 'select id, name, email, is_admin, is_active from users;'
-    cur = db.execute(sql_command)
-    all_users = cur.fetchall()
+    all_users = Users.query.all()
     return render_template('users.html', users=all_users, active_menu='users', cur_login=cur_login)
 
 
@@ -285,7 +270,6 @@ def new_user():
     if not cur_login.is_valid or not cur_login.is_admin:
         return redirect(url_for('login'))
 
-    db = get_db()
     message = None
     user = {}
 
@@ -296,13 +280,11 @@ def new_user():
         user['email'] = '' if 'email' not in request.form else request.form['email']
         user['user_pass'] = '' if 'user_pass' not in request.form else request.form['user_pass']
 
-        cursor = db.execute('select count(*) as cnt from users where name = ?', [user['user_name']])
-        record = cursor.fetchone()
-        is_user_name_unique = (record[0] == 0)
+        cursor = Users.query.filter(Users.name == user['user_name']).count()
+        is_user_name_unique = (cursor == 0)
 
-        cursor = db.execute('select count(*) as cnt from users where email = ?', [user['email']])
-        record = cursor.fetchone()
-        is_user_email_unique = (record[0] == 0)
+        cursor = Users.query.filter(Users.name == user['email']).count()
+        is_user_email_unique = (cursor == 0)
 
         if user['user_name'] == '':
             message = 'Name cannot be empty'
@@ -318,10 +300,10 @@ def new_user():
         if not message:
             user_pass = UserPass(user['user_name'], user['user_pass'])
             password_hash = user_pass.hash_password()
-            sql_statement = '''insert into users(name, email, password, is_active, is_admin)
-                          values(?,?,?, True, False);'''
-            db.execute(sql_statement, [user['user_name'], user['email'], password_hash])
-            db.commit()
+            user_to_add = Users(name=user['user_name'], email=user['email'], password=password_hash, is_active=True,
+                                is_admin=False)
+            db.session.add(user_to_add)
+            db.session.commit()
             flash('User {} created'.format(user['user_name']))
             return redirect(url_for('users'))
         else:
@@ -336,9 +318,7 @@ def edit_user(user_name):
     if not cur_login.is_valid or not cur_login.is_admin:
         return redirect(url_for('login'))
 
-    db = get_db()
-    cur = db.execute('select name, email from users where name = ?', [user_name])
-    user = cur.fetchone()
+    user = Users.query.filter(Users.name == user_name).first()
 
     if user is None:
         flash('No such user')
@@ -350,17 +330,15 @@ def edit_user(user_name):
         new_email = '' if 'email' not in request.form else request.form['email']
         new_password = '' if 'user_pass' not in request.form else request.form['user_pass']
 
-        if new_email != user[1]:
-            sql_statement = "update users set email = ? where name = ?"
-            db.execute(sql_statement, [new_email, user_name])
-            db.commit()
+        if new_email != user.email:
+            user.email = new_email
+            db.session.commit()
             flash('Email was changed')
 
         if new_password != '':
             user_pass = UserPass(user_name, new_password)
-            sql_statement = "update users set password = ?  where name = ?"
-            db.execute(sql_statement, [user_pass.hash_password(), user_name])
-            db.commit()
+            user.password = user_pass.hash_password()
+            db.session.commit()
             flash('Password was changed')
 
         return redirect(url_for('users'))
@@ -375,10 +353,9 @@ def delete_user(user_name):
 
     cur_login = session['user']
 
-    db = get_db()
-    sql_statement = "delete from users where name = ? and name <> ?"
-    db.execute(sql_statement, [user_name, cur_login])
-    db.commit()
+    user_to_delete = Users.query.filter(Users.name == user_name).filter(Users.name != cur_login).first()
+    db.session.delete(user_to_delete)
+    db.session.commit()
 
     return redirect(url_for('users'))
 
@@ -394,18 +371,17 @@ def user_status_change(action, user_name):
         return redirect(url_for('login'))
     cur_login = session['user']
 
-    db = get_db()
-
     if action == 'active':
-        db.execute("""update users set is_active = (is_active + 1) % 2 
-                      where name = ? and name <> ?""",
-                   [user_name, cur_login])
-        db.commit()
+        user = Users.query.filter(Users.name == user_name).filter(Users.name != cur_login).first()
+        if user:
+            user.is_active = (user.is_active + 1) % 2
+            db.session.commit()
+
     elif action == 'admin':
-        db.execute("""update users set is_admin = (is_admin + 1) % 2 
-                      where name = ? and name <> ?""",
-                   [user_name, cur_login])
-        db.commit()
+        user = Users.query.filter(Users.name == user_name).filter(Users.name != cur_login).first()
+        if user:
+            user.is_admin = (user.is_admin + 1) % 2
+            db.session.commit()
 
     return redirect(url_for('users'))
 

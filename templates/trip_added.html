@@ -20,7 +20,7 @@
       <label for="trip_name" class="col-form-label">Trip name</label>
     </div>
     <div class="col-4">
-      <input type="text" id="trip_name" name="trip_name" class="form-control" aria-describedby="passwordHelpInline" value="{{ trip[1] }}" readonly>
+      <input type="text" id="trip_name" name="trip_name" class="form-control" aria-describedby="passwordHelpInline" value="{{ trip.name }}" readonly>
     </div>
   </div>
 
@@ -29,7 +29,7 @@
       <label for="email" class="col-form-label">Your email</label>
     </div>
     <div class="col-4">
-      <input type="email" id="email" name="email" class="form-control" aria-describedby="passwordHelpInline" value="{{ trip[2] }}" readonly>
+      <input type="email" id="email" name="email" class="form-control" aria-describedby="passwordHelpInline" value="{{ trip.email }}" readonly>
     </div>
   </div>
 
@@ -38,7 +38,7 @@
       <label for="description" class="col-form-label">Short description</label>
     </div>
     <div class="col-4">
-      <textarea class="form-control" id="description" name="description" rows="3" readonly>{{ trip[3] }}</textarea>
+      <textarea class="form-control" id="description" name="description" rows="3" readonly>{{ trip.description }}</textarea>
     </div>
   </div>
 
@@ -48,13 +48,13 @@
     </div>
     <div class="col-4">
       <div class="form-check">
-        <input class="form-check-input" type="radio" name="completeness" id="completeness1" value="yes" {{ 'checked' if trip[4] }} disabled>
+        <input class="form-check-input" type="radio" name="completeness" id="completeness1" value="yes" {{ 'checked' if trip.completeness }} disabled>
         <label class="form-check-label" for="completeness1">
           Yes - the idea is complete including price proposal
         </label>
       </div>
       <div class="form-check">
-        <input class="form-check-input" type="radio" name="completeness" id="completeness2" value="no" {{ 'checked' if not trip[4] }} disabled>
+        <input class="form-check-input" type="radio" name="completeness" id="completeness2" value="no" {{ 'checked' if not trip.completeness }} disabled>
         <label class="form-check-label" for="completeness2">
           No - this is just pure idea
         </label>
@@ -68,7 +68,7 @@
     </div>
     <div class="col-4 mt-2">
       <div class="form-check">
-        <input class="form-check-input" type="checkbox" value="yes" id="flexCheckDefault" {{ 'checked' if trip[5] }} disabled >
+        <input class="form-check-input" type="checkbox" value="yes" id="flexCheckDefault" {{ 'checked' if trip.contact }} disabled >
         <label class="form-check-label" for="flexCheckDefault">
         Yes, I agree
         </label>
