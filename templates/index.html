@@ -32,7 +32,7 @@
 
     <button type="submit" class="btn btn-primary btn-block">Submit</button>
 
-    {% if not cur_login.is_valid %}
+    {% if not current_user.is_active %}
       <br><br><br><br><br><br><h5>Login to add your own trip ideas.</h5>
     {% endif %}
 

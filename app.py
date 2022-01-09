@@ -1,129 +1,95 @@
 from flask import Flask, render_template, request, url_for, flash, redirect, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required, \
+    fresh_login_required
+from urllib.parse import urlparse, urljoin
 
-import random
-import string
 import hashlib
 import binascii
 
 app = Flask(__name__)
 app.config.from_pyfile('config.cfg')
 db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+
+login_manager.login_view = 'login'
+login_manager.login_message = 'First, please log in using this form:'
+login_manager.refresh_view = 'login'
+login_manager.needs_refresh_message = 'You need to log in again:'
 
 
 class Trips(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True)
-    email = db.Column(db.String(100), unique=True)
-    description = db.Column(db.String(200))
-    completeness = db.Column(db.Boolean)
-    contact = db.Column(db.Boolean)
+    name = db.Column(db.String(100), primary_key=False)
+    email = db.Column(db.String(100), primary_key=False)
+    description = db.Column(db.String(200), primary_key=False)
+    completeness = db.Column(db.Boolean, primary_key=False)
+    contact = db.Column(db.Boolean, primary_key=False)
 
     def __repr__(self):
         return '<id: {}, name: {}>'.format(self.id, self.name)
 
 
-class Users(db.Model):
+class Users(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), unique=True)
-    email = db.Column(db.String(100), unique=True)
-    password = db.Column(db.Text)
-    is_active = db.Column(db.Boolean)
-    is_admin = db.Column(db.Boolean)
+    name = db.Column(db.String(100), primary_key=False)
+    email = db.Column(db.String(100), primary_key=False)
+    password = db.Column(db.Text, primary_key=False)
+    is_active = db.Column(db.Boolean, primary_key=False)
+    is_admin = db.Column(db.Boolean, primary_key=False)
 
     def __repr__(self):
         return '<id: {}, name: {}>'.format(self.id, self.name)
 
-
-class UserPass:
-
-    def __init__(self, user='', password=''):
-        self.user = user
-        self.password = password
-        self.email = ''
-        self.is_valid = False
-        self.is_admin = False
-
-    def hash_password(self):
+    @staticmethod
+    def hash_password(password):
         """Hash a password for storing."""
         # the value generated using os.urandom(60)
         os_urandom_static = b"ID_\x12p:\x8d\xe7&\xcb\xf0=H1\xc1\x16\xac\xe5BX\xd7\xd6j\xe3i\x11\xbe\xaa\x05\xccc\xc2\
         xe8K\xcf\xf1\xac\x9bFy(\xfbn.`\xe9\xcd\xdd'\xdf`~vm\xae\xf2\x93WD\x04"
         salt = hashlib.sha256(os_urandom_static).hexdigest().encode('ascii')
-        pwdhash = hashlib.pbkdf2_hmac('sha512', self.password.encode('utf-8'), salt, 100000)
+        pwdhash = hashlib.pbkdf2_hmac('sha512', password.encode('utf-8'), salt, 100000)
         pwdhash = binascii.hexlify(pwdhash)
         return (salt + pwdhash).decode('ascii')
 
-    def verify_password(self, stored_password, provided_password):
+    @staticmethod
+    def verify_password(stored_password_hash, provided_password):
         """Verify a stored password against one provided by user"""
-        salt = stored_password[:64]
-        stored_password = stored_password[64:]
+        salt = stored_password_hash[:64]
+        stored_password = stored_password_hash[64:]
         pwdhash = hashlib.pbkdf2_hmac('sha512', provided_password.encode('utf-8'), salt.encode('ascii'), 100000)
         pwdhash = binascii.hexlify(pwdhash).decode('ascii')
         return pwdhash == stored_password
 
-    def get_random_user_password(self):
-        """Preparing random password for first admin-user"""
-        random_user = ''.join(random.choice(string.ascii_lowercase) for i in range(3))
-        self.user = random_user
 
-        password_characters = string.ascii_letters  # + string.digits + string.punctuation
-        random_password = ''.join(random.choice(password_characters) for i in range(3))
-        self.password = random_password
+@login_manager.user_loader
+def load_user(user_id):
+    return Users.query.filter(Users.id == user_id).first()
 
-    def login_user(self):
-        """Logging user"""
-        user_record = Users.query.filter(Users.name == self.user).first()
 
-        if user_record is not None and self.verify_password(user_record.password, self.password):
-            return user_record
-        else:
-            self.user = None
-            self.password = None
-            return None
-
-    def get_user_info(self):
-        """Getting stored info if user is active and is an admin"""
-        db_user = Users.query.filter(Users.name == self.user).first()
-
-        if db_user is None:
-            self.is_valid = False
-            self.is_admin = False
-            self.email = ''
-        elif db_user.is_active != 1:
-            self.is_valid = False
-            self.is_admin = False
-            self.email = db_user.email
-        else:
-            self.is_valid = True
-            self.is_admin = db_user.is_admin
-            self.email = db_user.email
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
 
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-
     if request.method == 'GET':
         trips = Trips.query.all()
-        return render_template('index.html', trips=trips, active_menu='index', cur_login=cur_login)
+        return render_template('index.html', trips=trips, active_menu='index', cur_login=current_user)
     else:
         trip = request.form['name'] if 'name' in request.form else ''
         chosen_trip = Trips.query.filter(Trips.name == trip).first()
 
-        return render_template('trip_added.html', trip=chosen_trip, active_menu='index', cur_login=cur_login)
+        return render_template('trip_added.html', trip=chosen_trip, active_menu='index', cur_login=current_user)
 
 
 @app.route('/new_trip', methods=['GET', 'POST'])
+@login_required
 def new_trip():
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid:
-        return redirect(url_for('login'))
-
     if request.method == 'GET':
-        return render_template('new_trip.html', active_menu='new_trip', cur_login=cur_login)
+        return render_template('new_trip.html', active_menu='new_trip', cur_login=current_user)
     else:
 
         trip_name = '' if 'trip_name' not in request.form else request.form['trip_name']
@@ -142,30 +108,24 @@ def new_trip():
 
 
 @app.route('/all_trips')
+@login_required
+@fresh_login_required
 def all_trips():
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     trips = Trips.query.all()
-    return render_template('all_trips.html', trips=trips, active_menu='all_trips', cur_login=cur_login)
+    return render_template('all_trips.html', trips=trips, active_menu='all_trips', cur_login=current_user)
 
 
 @app.route('/edit_trip/<trip_id>', methods=['GET', 'POST'])
+@login_required
+@fresh_login_required
 def edit_trip(trip_id):
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     if request.method == 'GET':
         trip = Trips.query.filter(Trips.id == trip_id).first()
         if trip is None:
             flash('No such trip idea existing, sorry.')
             return redirect(url_for('all_trips'))
         else:
-            return render_template('edit_trip.html', trip=trip, active_menu='all_trips', cur_login=cur_login)
+            return render_template('edit_trip.html', trip=trip, active_menu='all_trips', cur_login=current_user)
     else:
         trip_name = '' if 'trip_name' not in request.form else request.form['trip_name']
         email = '' if 'email' not in request.form else request.form['email']
@@ -186,12 +146,9 @@ def edit_trip(trip_id):
 
 
 @app.route('/delete_trip/<trip_id>')
+@login_required
+@fresh_login_required
 def delete_trip(trip_id):
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     trip_to_delete = Trips.query.filter(Trips.id == trip_id).first()
     db.session.delete(trip_to_delete)
     db.session.commit()
@@ -204,40 +161,37 @@ def init_app():
     db.create_all()
     active_admins = Users.query.filter(Users.is_active is True, Users.is_admin is True).count()
 
-    print(active_admins)
-
     if active_admins > 0:
         flash('Application is already set-up. Nothing to do')
         return redirect(url_for('index'))
     else:
-        # if not - create/update admin account with a new password and admin privileges, display random username
-        user_pass = UserPass()
-        user_pass.get_random_user_password()
-        new_admin = Users(name=user_pass.user, email='noone@blablabla', password=user_pass.hash_password(),
+        new_admin = Users(id=1, name='admin', email='noone@blablabla', password=Users.hash_password('admin'),
                           is_active=True, is_admin=True)
         db.session.add(new_admin)
         db.session.commit()
-        flash('User {} with password {} has been created'.format(user_pass.user, user_pass.password))
+        flash('User admin has been created')
         return redirect(url_for('index'))
 
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-
     if request.method == 'GET':
-        return render_template('login.html', cur_login=cur_login, active_menu='login')
+        return render_template('login.html', cur_login=current_user, active_menu='login')
     else:
         user_name = '' if 'user_name' not in request.form else request.form['user_name']
         user_pass = '' if 'user_pass' not in request.form else request.form['user_pass']
+        remember = False if 'remember' not in request.form else request.form['remember']
 
-        new_login = UserPass(user_name, user_pass)
-        login_record = new_login.login_user()
+        new_login = Users.query.filter(Users.name == user_name).first()
 
-        if login_record is not None:
-            session['user'] = user_name
+        if new_login is not None and Users.verify_password(new_login.password, user_pass):
+            login_user(new_login, remember=remember)
             flash('Welcome {}'.format(user_name))
+
+            next1 = request.args.get('next')
+            if next1 and is_safe_url(next1):
+                return redirect(next1)
+
             return redirect(url_for('index'))
         else:
             flash('Wrong username or password, try again')
@@ -246,35 +200,28 @@ def login():
 
 @app.route('/logout')
 def logout():
-    if 'user' in session:
-        session.pop('user', None)
-        flash('You have logged out')
+    logout_user()
+    flash('You have logged out')
     return redirect(url_for('index'))
 
 
 @app.route('/users')
+@login_required
+@fresh_login_required
 def users():
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     all_users = Users.query.all()
-    return render_template('users.html', users=all_users, active_menu='users', cur_login=cur_login)
+    return render_template('users.html', users=all_users, active_menu='users', cur_login=current_user)
 
 
 @app.route('/new_user', methods=['GET', 'POST'])
+@login_required
+@fresh_login_required
 def new_user():
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     message = None
     user = {}
 
     if request.method == 'GET':
-        return render_template('new_user.html', user=user, active_menu='users', cur_login=cur_login)
+        return render_template('new_user.html', user=user, active_menu='users', cur_login=current_user)
     else:
         user['user_name'] = '' if 'user_name' not in request.form else request.form['user_name']
         user['email'] = '' if 'email' not in request.form else request.form['email']
@@ -298,26 +245,21 @@ def new_user():
             message = 'User with the email {} already exists'.format(user['email'])
 
         if not message:
-            user_pass = UserPass(user['user_name'], user['user_pass'])
-            password_hash = user_pass.hash_password()
-            user_to_add = Users(name=user['user_name'], email=user['email'], password=password_hash, is_active=True,
-                                is_admin=False)
+            user_to_add = Users(name=user['user_name'], email=user['email'],
+                                password=Users.hash_password(user['user_pass']), is_active=True, is_admin=False)
             db.session.add(user_to_add)
             db.session.commit()
             flash('User {} created'.format(user['user_name']))
             return redirect(url_for('users'))
         else:
             flash('Correct error: {}'.format(message))
-            return render_template('new_user.html', user=user, active_menu='users', cur_login=cur_login)
+            return render_template('new_user.html', user=user, active_menu='users', cur_login=current_user)
 
 
 @app.route('/edit_user/<user_name>', methods=['GET', 'POST'])
+@login_required
+@fresh_login_required
 def edit_user(user_name):
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     user = Users.query.filter(Users.name == user_name).first()
 
     if user is None:
@@ -325,7 +267,7 @@ def edit_user(user_name):
         return redirect(url_for('users'))
 
     if request.method == 'GET':
-        return render_template('edit_user.html', user=user, active_menu='users', cur_login=cur_login)
+        return render_template('edit_user.html', user=user, active_menu='users', cur_login=current_user)
     else:
         new_email = '' if 'email' not in request.form else request.form['email']
         new_password = '' if 'user_pass' not in request.form else request.form['user_pass']
@@ -336,8 +278,7 @@ def edit_user(user_name):
             flash('Email was changed')
 
         if new_password != '':
-            user_pass = UserPass(user_name, new_password)
-            user.password = user_pass.hash_password()
+            user.password = Users.hash_password(new_password)
             db.session.commit()
             flash('Password was changed')
 
@@ -345,12 +286,9 @@ def edit_user(user_name):
 
 
 @app.route('/delete_user/<user_name>')
+@login_required
+@fresh_login_required
 def delete_user(user_name):
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     cur_login = session['user']
 
     user_to_delete = Users.query.filter(Users.name == user_name).filter(Users.name != cur_login).first()
@@ -361,12 +299,9 @@ def delete_user(user_name):
 
 
 @app.route('/user_status_change/<action>/<user_name>')
+@login_required
+@fresh_login_required
 def user_status_change(action, user_name):
-    cur_login = UserPass(session.get('user'))
-    cur_login.get_user_info()
-    if not cur_login.is_valid or not cur_login.is_admin:
-        return redirect(url_for('login'))
-
     if 'user' not in session:
         return redirect(url_for('login'))
     cur_login = session['user']
