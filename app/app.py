@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, url_for, flash, redirect, session
+from flask import Flask, render_template, request, url_for, flash, redirect
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required, \
     fresh_login_required
@@ -19,7 +19,7 @@ login_manager.needs_refresh_message = 'You need to log in again:'
 
 
 class Trips(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    trip_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), primary_key=False)
     email = db.Column(db.String(100), primary_key=False)
     description = db.Column(db.String(200), primary_key=False)
@@ -27,11 +27,11 @@ class Trips(db.Model):
     contact = db.Column(db.Boolean, primary_key=False)
 
     def __repr__(self):
-        return '<id: {}, name: {}>'.format(self.id, self.name)
+        return '<id: {}, name: {}>'.format(self.trip_id, self.name)
 
 
 class Users(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(100), primary_key=False)
     email = db.Column(db.String(100), primary_key=False)
     password = db.Column(db.Text, primary_key=False)
@@ -120,7 +120,7 @@ def all_trips():
 @fresh_login_required
 def edit_trip(trip_id):
     if request.method == 'GET':
-        trip = Trips.query.filter(Trips.id == trip_id).first()
+        trip = Trips.query.filter(Trips.trip_id == trip_id).first()
         if trip is None:
             flash('No such trip idea existing, sorry.')
             return redirect(url_for('all_trips'))
@@ -133,7 +133,7 @@ def edit_trip(trip_id):
         completeness = False if request.form['completeness'] == 'no' else True
         contact = False if 'contact' not in request.form else True
 
-        trip = Trips.query.filter(Trips.id == trip_id).first()
+        trip = Trips.query.filter(Trips.trip_id == trip_id).first()
         trip.name = trip_name
         trip.email = email
         trip.description = description
@@ -149,18 +149,17 @@ def edit_trip(trip_id):
 @login_required
 @fresh_login_required
 def delete_trip(trip_id):
-    trip_to_delete = Trips.query.filter(Trips.id == trip_id).first()
+    trip_to_delete = Trips.query.filter(Trips.trip_id == trip_id).first()
     db.session.delete(trip_to_delete)
     db.session.commit()
+    flash('Trip "{}" has been deleted'.format(trip_to_delete.name))
     return redirect(url_for('all_trips'))
 
 
 @app.route('/init_app')
 def init_app():
-    # check if there are users defined (at least one active admin required)
     db.create_all()
-    active_admins = Users.query.filter(Users.is_active is True, Users.is_admin is True).count()
-
+    active_admins = Users.query.filter(Users.is_active, Users.is_admin).count()
     if active_admins > 0:
         flash('Application is already set-up. Nothing to do')
         return redirect(url_for('index'))
@@ -183,7 +182,6 @@ def login():
         remember = False if 'remember' not in request.form else request.form['remember']
 
         new_login = Users.query.filter(Users.name == user_name).first()
-
         if new_login is not None and Users.verify_password(new_login.password, user_pass):
             login_user(new_login, remember=remember)
             flash('Welcome {}'.format(user_name))
@@ -195,7 +193,7 @@ def login():
             return redirect(url_for('index'))
         else:
             flash('Wrong username or password, try again')
-            return render_template('login.html', active_menu='login')
+            return render_template('login.html', cur_login=current_user, active_menu='login')
 
 
 @app.route('/logout')
@@ -248,6 +246,7 @@ def new_user():
             user_to_add = Users(name=user['user_name'], email=user['email'],
                                 password=Users.hash_password(user['user_pass']), is_active=True, is_admin=False)
             db.session.add(user_to_add)
+            print(user_to_add)
             db.session.commit()
             flash('User {} created'.format(user['user_name']))
             return redirect(url_for('users'))
@@ -289,12 +288,13 @@ def edit_user(user_name):
 @login_required
 @fresh_login_required
 def delete_user(user_name):
-    cur_login = session['user']
-
-    user_to_delete = Users.query.filter(Users.name == user_name).filter(Users.name != cur_login).first()
+    user_to_delete = Users.query.filter(Users.name == user_name).filter(Users.id != current_user.get_id()).first()
+    if user_to_delete is None:
+        flash('You cannot delete yourself :)')
+        return redirect(url_for('users'))
     db.session.delete(user_to_delete)
     db.session.commit()
-
+    flash('User {} deleted.'.format(user_to_delete.name))
     return redirect(url_for('users'))
 
 
@@ -302,18 +302,14 @@ def delete_user(user_name):
 @login_required
 @fresh_login_required
 def user_status_change(action, user_name):
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    cur_login = session['user']
-
     if action == 'active':
-        user = Users.query.filter(Users.name == user_name).filter(Users.name != cur_login).first()
+        user = Users.query.filter(Users.name == user_name).filter(Users.id != current_user.get_id()).first()
         if user:
             user.is_active = (user.is_active + 1) % 2
             db.session.commit()
 
     elif action == 'admin':
-        user = Users.query.filter(Users.name == user_name).filter(Users.name != cur_login).first()
+        user = Users.query.filter(Users.name == user_name).filter(Users.id != current_user.get_id()).first()
         if user:
             user.is_admin = (user.is_admin + 1) % 2
             db.session.commit()

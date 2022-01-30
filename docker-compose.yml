@@ -1,0 +1,26 @@
+version: "3.8"
+services:
+
+  db:
+    image: postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: tripscrud
+      POSTGRES_PASSWORD: password
+
+  app:
+    build: ./app
+    volumes:
+      - ./app:/app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_DEBUG=1
+      - FLASK_ENV=development
+    depends_on:
+      - baza
+
+volumes:
+  db_data:

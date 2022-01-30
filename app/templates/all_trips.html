@@ -63,7 +63,7 @@
         <tbody>
           {% for trip in trips %}
           <tr>
-            <th scope="row">{{ trip.id }}</th>
+            <th scope="row">{{ trip.trip_id }}</th>
             <td>{{ trip.name }}</td>
             <td>{{ trip.email }}</td>
             <td>{{ trip.description }}</td>
@@ -82,11 +82,11 @@
                   {% endif %}
             </td>
             <td>
-                <a href="{{ url_for('edit_trip', trip_id = trip.id) }}" class="btn btn-success btn-sm" role="button">Edit</a>
+                <a href="{{ url_for('edit_trip', trip_id = trip.trip_id) }}" class="btn btn-success btn-sm" role="button">Edit</a>
                 <a type="button" class="btn btn-danger btn-sm delete-confirm"
                    data-bs-toggle="modal" data-bs-target="#confirmDeleteModal"
                    data-desc="{{ trip.name }}"
-                   data-url="{{ url_for('delete_trip', trip_id = trip.id) }}">Delete</a>
+                   data-url="{{ url_for('delete_trip', trip_id = trip.trip_id) }}">Delete</a>
             </td>
           </tr>
           {% endfor %}

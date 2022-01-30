@@ -6,7 +6,7 @@
 
 {% block page_body %}
 <br>
-<form id="trip_form" method="POST" action="{{ url_for('edit_trip', trip_id=trip.id) }}">
+<form id="trip_form" method="POST" action="{{ url_for('edit_trip', trip_id=trip.trip_id) }}">
   <div class="container">
     <br><h1>Edit trip "{{ trip.name }}" :</h1><br>
     <div class="row mb-3">
